@@ -4,61 +4,66 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pycountry
 
+# Page config
 st.set_page_config(page_title="Salaries 2025 Dashboard", layout="wide")
-
 st.title("📊 Data Science, AI & ML Job Salaries - 2025")
 
-# Upload CSV
-uploaded_file = st.file_uploader("Upload your cleaned salaries CSV file", type=["csv"])
+# Read the cleaned data
+df = pd.read_csv("cleaned_salaries.csv")
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    st.success("File successfully uploaded!")
+# Convert country codes to full names
+def get_country_name(code):
+    try:
+        return pycountry.countries.get(alpha_2=code).name
+    except:
+        return code  # fallback if not found
 
-    # Sidebar filters
-    with st.sidebar:
-        st.header("🔍 Filters")
-        job_filter = st.multiselect("Select Job Title(s):", df["job_title"].unique())
-        location_filter = st.multiselect("Select Company Location(s):", df["company_location"].unique())
+df["company_location_full"] = df["company_location"].apply(get_country_name)
 
-    # Apply filters
-    if job_filter:
-        df = df[df["job_title"].isin(job_filter)]
-    if location_filter:
-        df = df[df["company_location"].isin(location_filter)]
+# Sidebar Filters
+with st.sidebar:
+    st.header("🔍 Filters")
+    job_filter = st.multiselect("Select Job Title(s):", df["job_title"].unique())
+    location_filter = st.multiselect("Select Company Location(s):", df["company_location_full"].unique())
 
-    # Show dataset
-    st.subheader("📄 Dataset Preview")
-    st.dataframe(df.head(10))
+# Apply filters
+filtered_df = df.copy()
+if job_filter:
+    filtered_df = filtered_df[filtered_df["job_title"].isin(job_filter)]
+if location_filter:
+    filtered_df = filtered_df[filtered_df["company_location_full"].isin(location_filter)]
 
-    # Summary Stats
-    st.subheader("📈 Summary Statistics")
-    st.write(df.describe())
+# Show dataset preview
+st.subheader("📄 Dataset Preview")
+st.dataframe(filtered_df.head())
 
-    # Visualization 1 - Avg Salary by Job Title
-    st.subheader("💼 Average Salary by Job Title")
-    avg_salary_job = df.groupby("job_title")["salary_in_usd"].mean().sort_values(ascending=False)
-    fig1, ax1 = plt.subplots(figsize=(10, 4))
-    sns.barplot(x=avg_salary_job.values, y=avg_salary_job.index, ax=ax1)
-    ax1.set_xlabel("Average Salary (USD)")
-    ax1.set_ylabel("Job Title")
-    st.pyplot(fig1)
+# Summary Stats
+st.subheader("📈 Summary Statistics")
+st.write(filtered_df.describe())
 
-    # Visualization 2 - Count by Location
-    st.subheader("🌍 Number of Jobs per Company Location")
-    loc_counts = df["company_location"].value_counts()
-    fig2, ax2 = plt.subplots(figsize=(10, 4))
-    sns.barplot(x=loc_counts.values, y=loc_counts.index, ax=ax2)
-    ax2.set_xlabel("Number of Jobs")
-    ax2.set_ylabel("Company Location")
-    st.pyplot(fig2)
+# Plot 1: Average Salary by Job Title
+st.subheader("💼 Average Salary by Job Title")
+avg_salary = filtered_df.groupby("job_title")["salary_in_usd"].mean().sort_values(ascending=True)
+fig1, ax1 = plt.subplots(figsize=(10, 6))
+sns.barplot(x=avg_salary.values, y=avg_salary.index, palette="viridis", ax=ax1)
+ax1.set_xlabel("Average Salary (USD)")
+ax1.set_ylabel("Job Title")
+st.pyplot(fig1)
 
-    # Visualization 3 - Salary Distribution
-    st.subheader("📊 Salary Distribution")
-    fig3, ax3 = plt.subplots()
-    sns.histplot(df["salary_in_usd"], kde=True, ax=ax3)
-    ax3.set_xlabel("Salary in USD")
-    st.pyplot(fig3)
-else:
-    st.warning("Please upload the cleaned_salaries.csv file.")
+# Plot 2: Job Counts by Country
+st.subheader("🌍 Number of Jobs per Country")
+location_counts = filtered_df["company_location_full"].value_counts()
+fig2, ax2 = plt.subplots(figsize=(10, 6))
+sns.barplot(x=location_counts.values, y=location_counts.index, palette="coolwarm", ax=ax2)
+ax2.set_xlabel("Number of Jobs")
+ax2.set_ylabel("Country")
+st.pyplot(fig2)
+
+# Plot 3: Salary Distribution
+st.subheader("📊 Salary Distribution")
+fig3, ax3 = plt.subplots()
+sns.histplot(filtered_df["salary_in_usd"], kde=True, ax=ax3, color="skyblue")
+ax3.set_xlabel("Salary in USD")
+st.pyplot(fig3)
