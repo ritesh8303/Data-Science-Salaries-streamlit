@@ -32,13 +32,9 @@ if job_filter:
 if location_filter:
     filtered_df = filtered_df[filtered_df["company_location_full"].isin(location_filter)]
 
-# Use columns layout for compactness
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("📄 Dataset Preview (Top 5 rows)")
-    st.dataframe(filtered_df.head(), height=150)
-
     st.subheader("💼 Avg Salary by Job Title (Top 10)")
     avg_salary = filtered_df.groupby("job_title")["salary_in_usd"].mean().sort_values(ascending=False).head(10)
     fig1, ax1 = plt.subplots(figsize=(5, 3))
@@ -58,6 +54,7 @@ with col2:
     plt.tight_layout()
     st.pyplot(fig2)
 
+with col1:
     st.subheader("📊 Salary Distribution")
     fig3, ax3 = plt.subplots(figsize=(5, 3))
     sns.histplot(filtered_df["salary_in_usd"], kde=True, ax=ax3, color="skyblue", bins=20)
