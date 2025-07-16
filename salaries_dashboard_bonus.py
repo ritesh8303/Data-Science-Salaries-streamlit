@@ -11,7 +11,7 @@ st.set_page_config(page_title="AI/ML Job Salaries 2025", layout="wide")
 # Load data
 @st.cache_data
 def load_data():
-    df = pd.read_csv("salaries.csv")
+    df = pd.read_csv("cleaned_salaries.csv")
     df.columns = df.columns.str.lower().str.replace(" ", "_")
     return df
 
