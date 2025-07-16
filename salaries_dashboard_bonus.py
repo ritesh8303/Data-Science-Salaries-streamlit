@@ -1,110 +1,103 @@
 import streamlit as st
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import pycountry
+import plotly.express as px
 
 # === Page Setup ===
-st.set_page_config(page_title="2025 AI/ML Job Salaries", layout="wide")
-sns.set_style("whitegrid")
+st.set_page_config(page_title="2025 AI/ML Salary Dashboard", layout="wide")
 
 # === Load Data ===
 df = pd.read_csv("cleaned_salaries.csv")
 
-# Map country codes to full names
+# === Location Mapping ===
+import pycountry
 def get_country_name(code):
     try:
         return pycountry.countries.get(alpha_2=code).name
     except:
         return code
-
-df["company_country"] = df["company_location"].apply(get_country_name)
-df["employee_country"] = df["employee_residence"].apply(get_country_name)
+df["Location"] = df["company_location"].apply(get_country_name)
 
 # === Sidebar Filters ===
 with st.sidebar:
-    st.title("🔎 Filters")
-    job = st.selectbox("Job Title", ["All"] + sorted(df["job_title"].unique()))
-    country = st.selectbox("Company Country", ["All"] + sorted(df["company_country"].unique()))
-    experience = st.selectbox("Experience Level", ["All"] + sorted(df["experience_level"].unique()))
-    remote = st.slider("Remote Work %", 0, 100, (0, 100), step=25)
+    st.title("🔍 Filters")
+    job_titles = ["All"] + sorted(df["job_title"].unique())
+    locations = ["All"] + sorted(df["Location"].unique())
 
-# === Apply Filters ===
-filtered = df.copy()
-if job != "All":
-    filtered = filtered[filtered["job_title"] == job]
-if country != "All":
-    filtered = filtered[filtered["company_country"] == country]
-if experience != "All":
-    filtered = filtered[filtered["experience_level"] == experience]
-filtered = filtered[(filtered["remote_ratio"] >= remote[0]) & (filtered["remote_ratio"] <= remote[1])]
+    selected_job = st.selectbox("🎯 Job Title", job_titles)
+    selected_location = st.selectbox("🌍 Location", locations)
 
-# === Layout ===
-st.title("📊 AI & ML Job Salaries – 2025 Overview")
+# === Filter Logic ===
+filtered_df = df.copy()
+if selected_job != "All":
+    filtered_df = filtered_df[filtered_df["job_title"] == selected_job]
+if selected_location != "All":
+    filtered_df = filtered_df[filtered_df["Location"] == selected_location]
+
+# === Metrics ===
+avg_salary = filtered_df["salary_in_usd"].mean()
+max_salary = filtered_df["salary_in_usd"].max()
+min_salary = filtered_df["salary_in_usd"].min()
+
+st.title("💼 2025 AI/ML Job Salaries Dashboard")
+
 col1, col2, col3 = st.columns(3)
-
-# KPI 1: Average Salary
-with col1:
-    avg_salary = filtered["salary_in_usd"].mean()
-    st.metric("💰 Avg Salary (USD)", f"${avg_salary:,.0f}")
-
-# KPI 2: Most Common Job Title
-with col2:
-    common_job = filtered["job_title"].mode()[0] if not filtered.empty else "N/A"
-    st.metric("👩‍💻 Top Job Title", common_job)
-
-# KPI 3: Most Hiring Country
-with col3:
-    top_country = filtered["company_country"].value_counts().idxmax() if not filtered.empty else "N/A"
-    st.metric("🌍 Top Hiring Country", top_country)
+col1.metric("📊 Average Salary", f"${avg_salary:,.0f}")
+col2.metric("🔥 Max Salary", f"${max_salary:,.0f}")
+col3.metric("💤 Min Salary", f"${min_salary:,.0f}")
 
 st.markdown("---")
 
-# === Two Charts Side by Side ===
-chart1, chart2 = st.columns(2)
+# === Row 1: Bar Chart + Stacked Column ===
+c1, c2 = st.columns(2)
 
-# Chart 1: Avg Salary by Job Title
-with chart1:
-    st.subheader("💼 Avg Salary by Job Title (Top 6)")
-    top_jobs = (
-        filtered.groupby("job_title")["salary_in_usd"]
+# Bar Chart: Average Salary by Job Title
+with c1:
+    st.subheader("💼 Average Salary by Job Title")
+    bar_data = (
+        filtered_df.groupby("job_title")["salary_in_usd"]
         .mean()
-        .sort_values(ascending=False)
-        .head(6)
+        .sort_values(ascending=True)
+        .reset_index()
     )
-    fig, ax = plt.subplots(figsize=(5, 3))
-    sns.barplot(x=top_jobs.values, y=top_jobs.index, palette="Spectral", ax=ax)
-    ax.set_xlabel("USD Salary")
-    ax.set_ylabel("")
-    st.pyplot(fig)
+    fig1 = px.bar(
+        bar_data,
+        x="salary_in_usd",
+        y="job_title",
+        orientation="h",
+        color="salary_in_usd",
+        color_continuous_scale="Viridis",
+        labels={"salary_in_usd": "Avg Salary (USD)", "job_title": "Job Title"},
+        height=400
+    )
+    st.plotly_chart(fig1, use_container_width=True)
 
-# Chart 2: Job Count by Country
-with chart2:
-    st.subheader("📍 Job Count by Country (Top 6)")
-    top_countries = filtered["company_country"].value_counts().head(6)
-    fig2, ax2 = plt.subplots(figsize=(5, 3))
-    sns.barplot(x=top_countries.values, y=top_countries.index, palette="coolwarm", ax=ax2)
-    ax2.set_xlabel("No. of Jobs")
-    ax2.set_ylabel("")
-    st.pyplot(fig2)
+# Stacked Column Chart: Salary by Job Title and Experience
+with c2:
+    st.subheader("📚 Salary by Experience Level & Job Title")
+    grouped = filtered_df.groupby(["job_title", "experience_level"])["salary_in_usd"].mean().reset_index()
+    fig2 = px.bar(
+        grouped,
+        x="job_title",
+        y="salary_in_usd",
+        color="experience_level",
+        barmode="stack",
+        labels={"salary_in_usd": "Avg Salary", "job_title": "Job Title", "experience_level": "Experience"},
+        height=400,
+        color_discrete_sequence=px.colors.qualitative.Set2
+    )
+    st.plotly_chart(fig2, use_container_width=True)
 
-st.markdown("---")
-
-# === Final Row: Experience & Remote Correlation ===
-col4, col5 = st.columns(2)
-
-with col4:
-    st.subheader("📊 Salary vs Experience Level")
-    fig3, ax3 = plt.subplots(figsize=(4.5, 3))
-    sns.boxplot(x="experience_level", y="salary_in_usd", data=filtered, palette="Set2", ax=ax3)
-    ax3.set_xlabel("Experience Level")
-    ax3.set_ylabel("Salary (USD)")
-    st.pyplot(fig3)
-
-with col5:
-    st.subheader("🏡 Salary vs Remote Ratio")
-    fig4, ax4 = plt.subplots(figsize=(4.5, 3))
-    sns.scatterplot(x="remote_ratio", y="salary_in_usd", data=filtered, hue="company_country", ax=ax4, s=40)
-    ax4.set_xlabel("Remote Work (%)")
-    ax4.set_ylabel("Salary (USD)")
-    st.pyplot(fig4)
+# === Row 2: Map ===
+st.subheader("🗺️ Average Salary by Country")
+map_data = filtered_df.groupby("Location")["salary_in_usd"].mean().reset_index()
+fig3 = px.choropleth(
+    map_data,
+    locations="Location",
+    locationmode="country names",
+    color="salary_in_usd",
+    color_continuous_scale="Plasma",
+    title="Average Salary by Country",
+    labels={"salary_in_usd": "Avg Salary"},
+    height=500
+)
+st.plotly_chart(fig3, use_container_width=True)
