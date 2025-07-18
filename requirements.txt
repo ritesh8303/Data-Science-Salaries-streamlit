@@ -3,3 +3,7 @@ pandas
 seaborn
 matplotlib
 pycountry
+streamlit
+pandas
+plotly
+iso3166
