@@ -2,73 +2,105 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Load data
+# Load dataset
 df = pd.read_csv("cleaned_salaries_full_forms.csv")
 
-# Convert codes to full country names for readability
-from iso3166 import countries
-def get_country_name(code):
-    try:
-        return countries.get(code).name
-    except:
-        return code
+# Streamlit page config
+st.set_page_config(layout="wide", page_title="DS/ML/AI Salaries 2025 Dashboard")
 
-df['company_location_full'] = df['company_location'].apply(get_country_name)
+# Title
+st.markdown("## 📊 Data Science, AI & ML Job Salaries - 2025 Dashboard")
 
-# Sidebar filters
-st.sidebar.header("🔍 Filters")
-selected_year = st.sidebar.multiselect("Select Year", sorted(df['work_year'].unique()), default=df['work_year'].unique())
-selected_job = st.sidebar.multiselect("Select Job Title", sorted(df['job_title'].unique()), default=df['job_title'].unique())
-selected_location = st.sidebar.multiselect("Select Location", sorted(df['company_location_full'].unique()), default=df['company_location_full'].unique())
-selected_company = st.sidebar.multiselect("Select Company", sorted(df['company_name'].dropna().unique()), default=df['company_name'].dropna().unique())
+# ---- SIDEBAR FILTERS ----
+with st.sidebar:
+    st.header("🔎 Filter Options")
+    
+    # Job Titles (only first 8 selected by default)
+    job_titles = sorted(df["job_title"].unique().tolist())
+    default_jobs = job_titles[:8]
+    selected_jobs = st.multiselect("Job Title", options=job_titles, default=default_jobs)
 
-# Filtered data
+    # Locations
+    locations = sorted(df["employee_residence"].unique().tolist())
+    selected_locations = st.multiselect("Location", options=locations, default=locations)
+
+    # Companies
+    companies = sorted(df["company_name"].dropna().unique().tolist())
+    selected_companies = st.multiselect("Company", options=companies, default=companies)
+
+    # Work Year
+    years = sorted(df["work_year"].unique().tolist())
+    selected_years = st.multiselect("Year", options=years, default=years)
+
+# ---- DATA FILTERING ----
 filtered_df = df[
-    (df['work_year'].isin(selected_year)) &
-    (df['job_title'].isin(selected_job)) &
-    (df['company_location_full'].isin(selected_location)) &
-    (df['company_name'].isin(selected_company))
+    (df["job_title"].isin(selected_jobs)) &
+    (df["employee_residence"].isin(selected_locations)) &
+    (df["company_name"].isin(selected_companies)) &
+    (df["work_year"].isin(selected_years))
 ]
 
-# Main layout
-st.set_page_config(layout="wide")
-st.title("📊 Data Science, AI & ML Job Salaries - 2025 Dashboard")
+# ---- METRICS CARDS ----
+avg_salary = int(filtered_df["salary_in_usd"].mean())
+max_salary = int(filtered_df["salary_in_usd"].max())
+min_salary = int(filtered_df["salary_in_usd"].min())
+total_jobs = len(filtered_df)
 
-# Cards - KPI
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("💰 Average Salary (USD)", f"${filtered_df['salary_in_usd'].mean():,.0f}")
-col2.metric("🏆 Max Salary (USD)", f"${filtered_df['salary_in_usd'].max():,.0f}")
-col3.metric("📉 Min Salary (USD)", f"${filtered_df['salary_in_usd'].min():,.0f}")
-col4.metric("👥 Total Jobs", f"{filtered_df.shape[0]}")
+col1.metric("💰 Avg Salary (USD)", f"${avg_salary:,.0f}")
+col2.metric("📈 Max Salary (USD)", f"${max_salary:,.0f}")
+col3.metric("📉 Min Salary (USD)", f"${min_salary:,.0f}")
+col4.metric("🧑‍💼 Total Jobs", total_jobs)
 
-# Charts layout
-chart1, chart2 = st.columns(2)
+# ---- VISUALS ----
 
-# Bar Chart: Average Salary by Job Title
-avg_salary_job = filtered_df.groupby('job_title')['salary_in_usd'].mean().sort_values().reset_index()
-fig_bar = px.bar(avg_salary_job, x='salary_in_usd', y='job_title', orientation='h',
-                 color='salary_in_usd', color_continuous_scale='viridis',
-                 title="💼 Average Salary by Job Title")
-chart1.plotly_chart(fig_bar, use_container_width=True)
+# 1. Bar Chart: Average Salary by Job Title
+fig1 = px.bar(
+    filtered_df.groupby("job_title")["salary_in_usd"].mean().sort_values(ascending=False).reset_index(),
+    x="salary_in_usd",
+    y="job_title",
+    orientation='h',
+    color="salary_in_usd",
+    color_continuous_scale="viridis",
+    title="Average Salary by Job Title"
+)
 
-# Map: Salaries by Location
-location_salary = filtered_df.groupby('company_location_full')['salary_in_usd'].mean().reset_index()
-fig_map = px.choropleth(location_salary,
-                        locations='company_location_full',
-                        locationmode='country names',
-                        color='salary_in_usd',
-                        color_continuous_scale='plasma',
-                        title="🌍 Average Salaries by Country")
-chart2.plotly_chart(fig_map, use_container_width=True)
+# 2. Map: Average Salary by Location
+fig2 = px.scatter_geo(
+    filtered_df.groupby("employee_residence")["salary_in_usd"].mean().reset_index(),
+    locations="employee_residence",
+    locationmode="country names",
+    size="salary_in_usd",
+    color="salary_in_usd",
+    title="Salaries by Location (Map)",
+    color_continuous_scale="plasma"
+)
 
-# Stacked Column: Salary by Company and Job Title
-pivot = filtered_df.groupby(['company_name', 'job_title'])['salary_in_usd'].mean().reset_index()
-fig_stack = px.bar(pivot, x='company_name', y='salary_in_usd',
-                   color='job_title', title='🏢 Salary by Company & Job Title')
-st.plotly_chart(fig_stack, use_container_width=True)
+# 3. Stacked Column Chart: Salaries by Company and Job Title
+fig3 = px.bar(
+    filtered_df,
+    x="company_name",
+    y="salary_in_usd",
+    color="job_title",
+    title="Salaries by Company and Job Title"
+)
 
-# Line Chart: Salary Trends Over Years
-trend = filtered_df.groupby('work_year')['salary_in_usd'].mean().reset_index()
-fig_line = px.line(trend, x='work_year', y='salary_in_usd', markers=True,
-                   title='📈 Salary Trend Over Years')
-st.plotly_chart(fig_line, use_container_width=True)
+# 4. Line Chart: Salary Trend Over Years
+fig4 = px.line(
+    filtered_df.groupby("work_year")["salary_in_usd"].mean().reset_index(),
+    x="work_year",
+    y="salary_in_usd",
+    markers=True,
+    title="Salary Trends Over Years"
+)
+
+# ---- LAYOUT (All on screen without scroll) ----
+left_col, right_col = st.columns(2)
+
+with left_col:
+    st.plotly_chart(fig1, use_container_width=True)
+    st.plotly_chart(fig3, use_container_width=True)
+
+with right_col:
+    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig4, use_container_width=True)
