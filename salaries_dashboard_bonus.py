@@ -17,7 +17,7 @@ with st.sidebar:
     
     # Job Titles (only first 8 selected by default)
     job_titles = sorted(df["job_title"].unique().tolist())
-    default_jobs = job_titles[:8]
+    default_jobs = job_titles[:5]
     selected_jobs = st.multiselect("Job Title", options=job_titles, default=default_jobs)
 
     # Locations
